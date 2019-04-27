@@ -22,8 +22,8 @@ double averageSurfaceArea(std::vector<double>a)
 
 double Trapozide(double h, double f0, double f1)
 {
-	/*cout << "Trap: ";
-	cout << f0 << " " << f1 << endl;*/
+	/*cout << "Trap: "; */
+	//std::cout << f0 << " " << f1 << "\n";
 	return h*(f0 + f1) / 2.0;
 }
 
@@ -43,7 +43,9 @@ double Simp38(double h, double f0, double f1, double f2, double f3)
 
 double integrate(double step, std::vector<double>values)
 {
+    //std::cout<<step<<'\n';
     //aply trappzidal
+    //std::cout<< "\nsize is  "<<values.size()<<"\n";
     if(values.size()==2)
     {
         return Trapozide(step,values[0],values[1]);
@@ -339,12 +341,16 @@ int num_of_regions; //used for filling values logic
 double step; //used for filling values logic
 std::vector<char> variables_with_orders;
 std::vector<double> steps;
+std::vector<int> num_of_points;
 //now get over both limits and num_of_regions maps to fill in the num values map
 for (auto it = variables_values.cbegin(); it != variables_values.cend(); ++it)
 {
 starting_limit= variables_limits[it->first][0];  //start of integral
 end_limit= variables_limits[it->first][1];  //end of integral
-num_of_regions=variables_num_of_regions[it->first]; //num of regions for the domain
+num_of_regions=variables_num_of_regions[it->first]; //num of regions for the domains
+
+num_of_points.push_back(num_of_regions+1);
+
 step= double(std::abs(end_limit-starting_limit))/double(num_of_regions); //calculate the step to generate datapoints
 for(double j=starting_limit;j<=end_limit;j+=step)
 {
@@ -359,10 +365,10 @@ vectors_of_vectors_variable_values.push_back(it->second); //push the vector afte
  std::string func_s;
  std::vector<std::vector<double>> output;
  std::vector<double> outputTemp;
+ //get all the possible combinations of all elements
  cart_product(output, outputTemp, vectors_of_vectors_variable_values.begin(), vectors_of_vectors_variable_values.end());
  std::vector<std::vector<double>>::iterator row;
  std::vector<double>::iterator col;
- int ist=0;
  std::vector<char> all_char;
 std::vector<double> value_temp;
 char temp_char;
@@ -371,74 +377,118 @@ int flag_found=0;
 //we need to store the values for each pount in a domain at a vector of vectors
 std::vector<std::vector<double>> evaluations_at_point;
 int current_point=-1;
-double temp_value;
 double result;
 
+int num_of_variables=variables_with_orders.size();
+int current_variable=num_of_variables-1;
 
-//repeat that for all the elements
-for (row = output.begin(); row != output.end(); row++) {
-    for (col = row->begin(); col != row->end(); col++) {
-        value_temp.push_back(*col);
-    }
+int count_all=0;
+int ia=0;
+int count_private=0; //used to terminate the for loop
 
-    //now look for the values for each domain
-    for(int ia=0;ia<func.length();ia++)
-    {
-        temp_char=func[ia];
-        flag_found=0;
-        for(int ib=0;ib<variables_with_orders.size();ib++)
+std::vector<std::vector<double>> copy_of_output=output;
+std::vector<double> current_points; //have the current points to evaluate
+std::vector<double> points_evaluated; //have the evaluation results at each iteration
+std::vector<double > current_integrations; //will hold the result of simpson or trap to the calculated evals
+int set_flag_out=0;
+std::vector<double>to_evaluate;
+std::vector<double>copy_of_integ;
+
+//we just do all of the following to get integration over the very last two inner domains
+    for(;;)
+    {   //std::cout<<"I got there\n";
+        if ((ia<num_of_points[current_variable]) && !(set_flag_out))
         {
-            if(variables_with_orders[ib]==temp_char)
+            for(int ib=0;ib<num_of_variables;ib++)
             {
-                func_temp<<value_temp[ib]<<" ";
-                flag_found=1;
-                break;
+               // std::cout<<output[count_all][ib]<<"\t";
+               current_points.push_back(output[count_all][ib]);
+            }
+
+            //now look for the values for each domain
+            for(int ic=0;ic<func.length();ic++)
+            {
+                temp_char=func[ic];
+                flag_found=0;
+                for(int id=0;id<variables_with_orders.size();id++)
+                {
+                    if(variables_with_orders[id]==temp_char)
+                    {
+                        func_temp<<current_points[id]<<" ";
+                        flag_found=1;
+                        break;
+                    }
+                }
+            if (!flag_found)
+                {
+            func_temp<<func[ic]<<" ";
+                }
+            }
+            result=evaluate(func_temp.str());
+            std::cout<<func_temp.str()<<"\t" <<result<<"\n";
+            points_evaluated.push_back(result);
+            func_temp.str("");
+            current_points.clear();
+            count_all++;
+            count_private++;
+            ia++;
+        }
+        else if(count_all>= output.size())
+        {
+         current_integrations.push_back(integrate(steps[current_variable],points_evaluated));
+         std::cout<<"result =" << integrate(steps[current_variable],points_evaluated)<<"\n";
+         set_flag_out=1;
+         for(;;)
+            {output.clear();
+            current_variable--;
+
+            if(current_variable<=-1)
+            {
+            break;
+            }
+            else
+            {
+                std::cout<<"\n\n\n";
+                for (int ss=0;ss<current_integrations.size();ss+=num_of_points[current_variable])
+                {
+                    for(int bb=0;bb<num_of_points[current_variable];bb++)
+                    {
+                        //std::cout<<"\n"<<current_integrations[ss+bb]<<'\t';
+                        to_evaluate.push_back(current_integrations[ss+bb]);
+                        //output[ss].push_back(current_integrations[bb]);
+                    }
+                    copy_of_integ.push_back(integrate(steps[current_variable],to_evaluate));
+                    to_evaluate.clear();
+                }
+                current_integrations.clear();
+                current_integrations=copy_of_integ;
+                //std::cout<<current_integrations.size()<<"\t";
+                copy_of_integ.clear();
             }
         }
-        if (!flag_found)
+        break;
+        }
+        else
         {
-            func_temp<<func[ia]<<" ";
+            //evaluate the integral first over this domain
+            current_integrations.push_back(integrate(steps[current_variable],points_evaluated));
+            std::cout<<"result =" << integrate(steps[current_variable],points_evaluated)<<"\n";
+            //for(int iop=0; iop<points_evaluated.size();iop++)
+            //{
+            //    std::cout<<points_evaluated[iop]<<"\t";
+            //}
+            std::cout<<"\n";
+            points_evaluated.clear();
+            ia=0; //repeat again
         }
     }
-    std::cout<<func_temp.str()<<"\t";
-    //now evaluate the string
-    std::cout<<evaluate(func_temp.str())<<"\n";
-    //std::cout<<evaluate("2 * 3")<<"\n";
-    //result=evaluate(func_temp.str());
-    if(temp_value==value_temp[0])
-    {
-        //evaluations_at_point[current_point].push_back(result);
-    }
-    else
-    {
-        current_point++;
-        temp_value=value_temp[0];
-        //evaluations_at_point.push_back(std::vector<double>());
-        //evaluations_at_point[current_point].push_back(result);
-    }
-    func_temp.str("");
-    value_temp.clear();
+
+
+for(int i=0;i<current_integrations.size();i++)
+{
+    std::cout<<"\n\n\n"<<current_integrations[i]<<'\t';
 }
 
-
-//
-//for (row = evaluations_at_point.begin(); row != evaluations_at_point.end(); row++) {
-//    for (col = row->begin(); col != row->end(); col++) {
-//        std::cout<<*col<<"\t";
-//    }
-//    std::cout<<"\n";
-//}
-
-//std::vector<double>second_values;
-//for (int i=0;i<evaluations_at_point.size();i++)
-//{
-//second_values.push_back(integrate(steps[1],evaluations_at_point[i]));
-//}
-
-//finish now
-//std::cout<<"The volume is "<<integrate(steps[1],second_values);
-
-//std::cout<<"The volume is "<< integrate(steps[0],evaluations_at_point[0])<<"\n";
 
 }
 else if(user_choice == DATAPOINTS){
