@@ -272,31 +272,10 @@ void cart_product(
     }
 }
 
+//return result for a function input
 std::string Integrator::getResult(std::string func,std::string limits_str)
 {
-    std::map<char,std::vector<double>> variables_values; //use it to store variable, its all values tuples
-    std::map<char,int> variables_num_of_regions; //use it to store variables, its number of points tuples
-    std::map<char,std::vector<double>> variables_limits; //get limits of each domain
-    std::vector<std::vector<double>> vectors_of_vectors_variable_values;  //vector of vectors
-
-    srand(time(NULL));  //will use for randoization logic
-
-    //now get the name of each variable
-    for(int i=0; i<func.length(); i++)
-    {
-    func[i]=tolower(func[i]);
-
-    //get all the variabels in equation
-    if (int(func[i])>=97 && int(func[i])<=122) //betwwee a and z ascii
-    {
-       variables_values.insert(std::pair< char,std::vector<double> >(func[i],std::vector<double>())); //insert the variable now
-       variables_limits.insert(std::pair< char,std::vector<double> >(func[i],std::vector<double>())); //insert the variable now
-        //we will keep it for the program to determine the number of points for each domain
-        //however we keep it a must to take at least 2 data points of course (region num=1)
-       variables_num_of_regions.insert(std::pair<char,int>(func[i],rand() % 2 + 1));
-    }
-    }
-
+    //all the following sub-section is for parsing the limits string passed in by ui
     //taking limits from user
     char current_var;
     //we can know go over the variables and push their values according to the number of points
@@ -306,8 +285,10 @@ std::string Integrator::getResult(std::string func,std::string limits_str)
     double val = 0;
     double domin=1;
     int flag_frac=0;
+    std::map<char,std::vector<double>> variables_limits; //get limits of each domain
 
     //get the limits of the string passed by ui
+    //we also get to know the variables used from here
     for (;;)
     {
       //we need to break the loop when reaching the limit of string len
@@ -321,7 +302,9 @@ std::string Integrator::getResult(std::string func,std::string limits_str)
       //such variable
       else if (int(limits_str[xx])>=97 && int(limits_str[xx])<=122) //betwween a and z ascii
       {
-          current_var=limits_str[xx];
+          current_var=tolower(limits_str[xx]);
+          variables_limits.insert(std::pair< char,std::vector<double> >
+                                  (current_var,std::vector<double>())); //make new place for this variable in the vector
           val = 0;
           domin=1;
           flag_frac=0;
@@ -414,55 +397,54 @@ std::string Integrator::getResult(std::string func,std::string limits_str)
             }
     }
 
-    int num_of_regions; //used for filling values logic
+    //the following sub-section is to store the number of points,steps, and values taken by each domain variable
     double step; //used for filling values logic
     std::vector<char> variables_with_orders;
     std::vector<double> steps;
     std::vector<int> num_of_points;
+    double randomresult;
+    srand(time(NULL));  //will use for randoization logic in creating num of regions
+    std::vector<double>current_variable_values; //vector to store values for current variable
+    std::vector<std::vector<double>> vectors_of_vectors_variable_values;  //vector of vectors for allvealues
+
     //now get over both limits and num_of_regions maps to fill in the num values map
-    for (auto it = variables_values.cbegin(); it != variables_values.cend(); ++it)
+    for (auto it = variables_limits.cbegin(); it != variables_limits.cend(); ++it)
     {
+    current_variable_values.clear(); //make sure that all values are empty for this domain first
     starting_limit= variables_limits[it->first][0];  //start of integral
     end_limit= variables_limits[it->first][1];  //end of integral
-    num_of_regions=variables_num_of_regions[it->first]; //num of regions for the domains
-    num_of_points.push_back(num_of_regions+1);
-
-    step= double(std::abs(end_limit-starting_limit))/double(num_of_regions); //calculate the step to generate datapoints
+    randomresult=rand() % 3 + 2;
+    num_of_points.push_back(randomresult);    //at least two points are added
+    //in the next line we calculate the step to generate datapoint (note that num of points-1 is the n:number of regions) h=(b-a)/n
+    step= double(std::abs(end_limit-starting_limit))/double(randomresult-1);
+    variables_with_orders.push_back(it->first); //add the variables in order
+    steps.push_back(step);  //add the steps in the same order as variables
     for(double j=starting_limit;j<=end_limit;j+=step)
     {
-        variables_values[it->first].push_back(j);
+            current_variable_values.push_back(j);
     }
-    variables_with_orders.push_back(it->first);
-    steps.push_back(step);
-    vectors_of_vectors_variable_values.push_back(it->second); //push the vector after you finish
+    //the next line pushes values taken by each domain in the same order as occurence of that domain
+    vectors_of_vectors_variable_values.push_back(current_variable_values);
     }
 
-     std:: ostringstream func_temp;
-     std::string func_s;
-     std::vector<std::vector<double>> output;
-     std::vector<double> outputTemp;
-     //get all the possible combinations of all elements
-     cart_product(output, outputTemp, vectors_of_vectors_variable_values.begin(), vectors_of_vectors_variable_values.end());
-     std::vector<std::vector<double>>::iterator row;
-     std::vector<double>::iterator col;
-     std::vector<char> all_char;
-    std::vector<double> value_temp;
+    //the following sub-section gets all possible combinations of values for all domains together
+    std:: ostringstream func_temp; //used to hold modified version of function for evaluation
+    std::vector<std::vector<double>> output;   //used to hold the result of cartesian product of all vector variables
+    std::vector<double> outputTemp; //used internally in the cartesian product function
+    //the following line gets all the possible combinations of all elements
+    cart_product(output, outputTemp, vectors_of_vectors_variable_values.begin(), vectors_of_vectors_variable_values.end());
+
+    //The following sub-section is used to get the integration result
+    //it goes over the function string and evaluates it at each combination of datapoints
+    //such evaluations are requested based on the number of points for each domain
     char temp_char;
     int flag_found=0;
-
-    //we need to store the values for each pount in a domain at a vector of vectors
-    std::vector<std::vector<double>> evaluations_at_point;
-    int current_point=-1;
-    double result;
-
+    double result; //stores the evaluation of the function at certain combinations of points
     int num_of_variables=variables_with_orders.size();
-    int current_variable=num_of_variables-1;
-
-    int count_all=0;
-    int ia=0;
+    int current_variable=num_of_variables-1; //we start with last variable points and evaluate its function points
+    int count_all=0; //used to count all iterations over the cartesion product output
+    int ia=0;   //used insied the for loop to know the index of current element
     int count_private=0; //used to terminate the for loop
-
-    std::vector<std::vector<double>> copy_of_output=output;
     std::vector<double> current_points; //have the current points to evaluate
     std::vector<double> points_evaluated; //have the evaluation results at each iteration
     std::vector<double > current_integrations; //will hold the result of simpson or trap to the calculated evals
@@ -471,87 +453,102 @@ std::string Integrator::getResult(std::string func,std::string limits_str)
     std::vector<double>copy_of_integ;
 
     //we just do all of the following to get integration over the very last two inner domains
-        for(;;)
-        {
-            if ((ia<num_of_points[current_variable]) && !(set_flag_out))
-            {
-                for(int ib=0;ib<num_of_variables;ib++)
-                {
-                   current_points.push_back(output[count_all][ib]);
-                }
-
-                //now look for the values for each domain
-                for(int ic=0;ic<func.length();ic++)
-                {
-                    temp_char=func[ic];
-                    flag_found=0;
-                    for(int id=0;id<variables_with_orders.size();id++)
-                    {
-                        if(variables_with_orders[id]==temp_char)
-                        {
-                            func_temp<<current_points[id]<<" ";
-                            flag_found=1;
-                            break;
-                        }
-                    }
-                if (!flag_found)
-                    {
-                func_temp<<func[ic]<<" ";
-                    }
-                }
-                result=evaluate(func_temp.str());
-                points_evaluated.push_back(result);
-                func_temp.str("");
-                current_points.clear();
-                count_all++;
-                count_private++;
-                ia++;
-            }
-            else if(count_all>= output.size())
-            {
-             current_integrations.push_back(integrate(steps[current_variable],points_evaluated));
-             set_flag_out=1;
-             for(;;)
-                {output.clear();
-                current_variable--;
-
-                if(current_variable<=-1)
-                {
-                break;
-                }
-                else
-                {
-                    for (int ss=0;ss<current_integrations.size();ss+=num_of_points[current_variable])
-                    {
-                        for(int bb=0;bb<num_of_points[current_variable];bb++)
-                        {
-                            to_evaluate.push_back(current_integrations[ss+bb]);
-                        }
-                        copy_of_integ.push_back(integrate(steps[current_variable],to_evaluate));
-                        to_evaluate.clear();
-                    }
-                    current_integrations.clear();
-                    current_integrations=copy_of_integ;
-                    copy_of_integ.clear();
-                }
-            }
-            break;
-            }
-            else
-            {
-                //evaluate the integral first over this domain
-                current_integrations.push_back(integrate(steps[current_variable],points_evaluated));
-                points_evaluated.clear();
-                ia=0; //repeat again
-            }
-        }
-
-
-    for(int i=0;i<current_integrations.size();i++)
+    for(;;)
     {
-       // std::cout<<"Result of integration is\t"<<current_integrations[i]<<'\t';
+      //this condition is only satisifed if we can still iterate over the output vector
+      if ((ia<num_of_points[current_variable]) && !(set_flag_out))
+      {
+        //change the values of only one variable which happens to be the very last variable in the vector
+        for(int ib=0;ib<num_of_variables;ib++)
+        {
+          current_points.push_back(output[count_all][ib]); //push one of the combinations of all domain values
+        }
+        //now look for the values for each domain and evaluate the function at this combination points
+        for(int ic=0;ic<func.length();ic++)
+        {
+          temp_char=func[ic];
+          flag_found=0;
+          for(int id=0;id<variables_with_orders.size();id++)
+          {
+              //the current character is a domain variable name (i.e. x,y,z,..etc)
+              //then we concatenate its evaluation for now
+              if(variables_with_orders[id]==temp_char)
+              {
+                  func_temp<<current_points[id]<<" ";
+                  flag_found=1;
+                  break;
+              }
+          }
+          //The current character is a number, a negative sign or operator, then we just concatenate it
+          if (!flag_found)
+          {
+              func_temp<<func[ic]<<" ";
+          }
+       }
+        //now we are done and have the function string ready to get evaluated
+        // we send it to our evaluator function and get back our fancy result
+        result=evaluate(func_temp.str());
+        points_evaluated.push_back(result); //just push back that result in the vector
+        func_temp.str(""); //clear the function string
+        current_points.clear(); //clear the current points vector
+        count_all++; //increment the count of iteration over output vector by 1
+        count_private++;
+        ia++; //increment index by 1 and repeat the loop again
+      }
+      //else we finsished the first iteration over the output vector
+      //and we no longer have to evaluate the function again
+      //just trap the fucntion here and make eneter an infinite loop until we
+      //evaluate the final integration result
+      else if(count_all>= output.size())
+      {
+          //the next line pushes the integration of the last points calculated before
+          //there was no other place to evaluate this before but here
+          current_integrations.push_back(integrate(steps[current_variable],points_evaluated));
+          set_flag_out=1; //make sure not to jump again and exit this trap
+          for(;;)
+          {
+              current_variable--; //do the same thing for the next variable (actually the one before the one we just finsihed)
+              if(current_variable<=-1) //the only way out is that we are done with all domain variables
+              {
+                  break;
+              }
+              else
+              {
+                  //the logic is that we now have a vector of previous integrations
+                  //what we need to do is that we fix the variable before last current and
+                  //calculate integral at for the current variable
+                  //so we make a valuable for loop that iterates over the current integration evaluations (for element
+                  //that we just finsihed) then start to do integration for this vector but according to the new element(variable)
+                  for (int ss=0;ss<current_integrations.size();ss+=num_of_points[current_variable])
+                  {
+                      for(int bb=0;bb<num_of_points[current_variable];bb++)
+                      {
+                          //we have new values to evaluate integral for
+                          to_evaluate.push_back(current_integrations[ss+bb]);
+                      }
+                      //just push the integration result insied a temp vector for now
+                      copy_of_integ.push_back(integrate(steps[current_variable],to_evaluate));
+                      to_evaluate.clear();
+                  }
+                  current_integrations.clear(); //clear the integration results for previous element
+                  current_integrations=copy_of_integ;// copy paste the integration result for current element to use it for next or as final result
+                  copy_of_integ.clear();//dont forget to clear the temp vector
+              }
+            }
+            break; //make sure to break out of this jail
+      }
+      //or we are just in need of more evaluations but the variable before last changed :(
+      else
+      {
+          //evaluate the integral first over this domain
+          current_integrations.push_back(integrate(steps[current_variable],points_evaluated));
+          points_evaluated.clear(); //make sure that evaluation of function at these combination is cleared first
+          ia=0; //repeat again
+      }
     }
 
+    //dont forget to send back the result of all of this to the ui
+    //the result should be contained insied the current integration vector which should be having only one element here
     std:: ostringstream result_of_integration;
     result_of_integration<<current_integrations[0];
     return (result_of_integration.str());
