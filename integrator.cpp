@@ -659,6 +659,20 @@ std::string Integrator::getResultByFile(std::string filename)
                 k++;
                 set_flag=1;
                 calc_step_flag=1;
+                if(k>=all_values.size())
+                {
+                    current_integration_evaluations.clear();
+                    current_integration_evaluations=copy_of_integrations;
+                    to_evaluate.clear();
+                    to_evaluate.push_back(current_integration_evaluations[0]);
+                    //std::cerr<<current_integration_evaluations[0];
+                    copy_of_integrations.clear();
+                    sum_of_integration_region=0;
+                    repetition_of_variable=0;
+                    calc_step_flag=1;
+                    k=1;
+                    current_variable--;
+                }
             }
       else{
           k++;
@@ -692,8 +706,6 @@ std::string Integrator::getResultByFile(std::string filename)
     to_evaluate.clear();
     to_evaluate.push_back(current_integration_evaluations[0]);
 
-    for (int ys=0;ys<current_integration_evaluations.size();ys++)
-        std::cerr<<current_integration_evaluations[ys]<<"\n";
     //check steps in the very first domain variable
     for(int y=1;y< all_values.size();y++)
     {
