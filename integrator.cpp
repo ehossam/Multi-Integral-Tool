@@ -1,6 +1,6 @@
 #include "integrator.h"
-#include <string>
 #include <bits/stdc++.h>
+#include <fstream>
 
 Integrator::Integrator()
 {
@@ -273,7 +273,7 @@ void cart_product(
 }
 
 //return result for a function input
-std::string Integrator::getResult(std::string func,std::string limits_str)
+std::string Integrator::getResultByFunction(std::string func,std::string limits_str)
 {
     //all the following sub-section is for parsing the limits string passed in by ui
     //taking limits from user
@@ -551,5 +551,173 @@ std::string Integrator::getResult(std::string func,std::string limits_str)
     //the result should be contained insied the current integration vector which should be having only one element here
     std:: ostringstream result_of_integration;
     result_of_integration<<current_integrations[0];
+    return (result_of_integration.str());
+}
+
+//return result for a datapoints input
+std::string Integrator::getResultByFile(std::string filename)
+{
+
+
+    //the next sub-section is used for getting values from the file and store it in all_values as vector of vectors
+    //also the name of variables with order is stored in variables vector
+    std::ifstream file(filename);
+    std::vector<std::string> variables;
+    std::vector<double> line_values;
+    std::vector<std::vector<double>> all_values;
+    if (file.is_open()) {
+        std::string line;
+        std::string firstword;
+        int countlines=0;
+        while (std::getline(file, line)) {
+            firstword=line.c_str();
+            std::istringstream iss(firstword);
+            if (countlines==0)
+            {
+                countlines++;
+                //we need to store the variable names at the very beginning
+                for(std::string firstword; iss >> firstword; )
+                    variables.push_back(firstword);
+            }
+            else{
+                line_values.clear();
+                //here we store the values taken by each variable along with the function evaluation at such evaluation
+                for(std::string firstword; iss >> firstword; )
+                    line_values.push_back(std::stod(firstword));
+                all_values.push_back(line_values);
+            }
+        }
+        //we need to get rid of the last element of the variable names because it just indicates the output name
+        variables.erase(variables.end() - 1); // trying to erase the last element of vec
+        //we need to close the file by now
+        file.close();
+    }
+
+    //The next sub-section is used to iterate over the vector of vector and see the changes in the last variable first
+    //and check the step in each line and make sure to apply appropriate integration
+    double old_step=-1; //this has the step for the currently being processed value and the previous
+    double new_step=-1;
+    int current_variable=variables.size()-1; //this should conatin the current variable being processed
+    int index_of_func_eval=variables.size(); //this has the index of the evaluation of the function at each combination
+    std::vector<double> to_evaluate; //the values to evaluate their integration
+    std::vector<double> current_integration_evaluations; //the evaluation of previous points
+    std::vector<double> copy_of_integrations; //serves as a temp vector for integrations
+
+    for(int ii=0;ii<all_values.size();ii++)
+    {
+        //push the evaluations of the function by now
+        current_integration_evaluations.push_back(all_values[ii][index_of_func_eval]);
+    }
+
+    //for the very first element
+    to_evaluate.push_back(current_integration_evaluations[0]);
+    old_step=all_values[1][current_variable]-all_values[0][current_variable];
+    int repetition_of_variable=0;
+    int k=1;
+    int set_flag=1;
+    double sum_of_integration_region=0;
+    int calc_step_flag=0;
+
+
+    //do this for the last domain variable only
+    while(current_variable-1>=0)
+    {
+      if(all_values[k][current_variable]!=all_values[k-1][current_variable]
+            && all_values[k][current_variable-1]==all_values[k-1][current_variable-1])
+            {
+                set_flag=0;
+                repetition_of_variable++;
+                //check step
+                new_step=all_values[k][current_variable]-all_values[k-1][current_variable];
+                if(calc_step_flag)
+                {
+                    old_step=new_step;
+                    calc_step_flag=0;
+                }
+                if(old_step==new_step)
+                {
+                    to_evaluate.push_back(current_integration_evaluations[repetition_of_variable]);
+                }
+                else
+                {
+                    sum_of_integration_region+=(integrate(old_step,to_evaluate));
+                    to_evaluate.clear();
+                    old_step=new_step;
+                    to_evaluate.push_back(current_integration_evaluations[repetition_of_variable-1]);
+                    to_evaluate.push_back(current_integration_evaluations[repetition_of_variable]);
+                }
+                k++;
+            }
+        else if (all_values[k][current_variable-1]!=all_values[k-1][current_variable-1])
+            {
+                repetition_of_variable++;
+                sum_of_integration_region+=(integrate(old_step,to_evaluate));
+                to_evaluate.clear();
+                to_evaluate.push_back(current_integration_evaluations[repetition_of_variable]);
+                copy_of_integrations.push_back(sum_of_integration_region);
+                sum_of_integration_region=0;
+                k++;
+                set_flag=1;
+                calc_step_flag=1;
+            }
+      else{
+          k++;
+      }
+            if(k>=all_values.size() && !set_flag)
+            {
+                set_flag=0;
+                repetition_of_variable=0;
+                sum_of_integration_region+=(integrate(old_step,to_evaluate));
+                to_evaluate.clear();
+                copy_of_integrations.push_back(sum_of_integration_region);
+                current_integration_evaluations.clear();
+                current_integration_evaluations=copy_of_integrations;
+                to_evaluate.push_back(current_integration_evaluations[0]);
+                //std::cerr<<current_integration_evaluations[0];
+                copy_of_integrations.clear();
+                sum_of_integration_region=0;
+                calc_step_flag=1;
+                k=1;
+                current_variable--;
+            }
+    }
+
+
+    //final iteration is for the final values to get the current steps
+    old_step=-1;
+    new_step=-1;
+    copy_of_integrations.clear();
+    repetition_of_variable=0;
+    sum_of_integration_region=0;
+    to_evaluate.clear();
+    to_evaluate.push_back(current_integration_evaluations[0]);
+
+    for (int ys=0;ys<current_integration_evaluations.size();ys++)
+        std::cerr<<current_integration_evaluations[ys]<<"\n";
+    //check steps in the very first domain variable
+    for(int y=1;y< all_values.size();y++)
+    {
+        if(all_values[y][0]!=all_values[y-1][0])
+        {
+            repetition_of_variable++;
+            new_step=all_values[y][0]-all_values[y-1][0];
+            if((new_step!=old_step) &&repetition_of_variable!=1)
+            {
+                sum_of_integration_region+=integrate(old_step,to_evaluate);
+                to_evaluate.clear();
+                old_step=new_step;
+                to_evaluate.push_back(current_integration_evaluations[repetition_of_variable-1]);
+                to_evaluate.push_back(current_integration_evaluations[repetition_of_variable]);
+            }
+            else
+            {
+                to_evaluate.push_back(current_integration_evaluations[repetition_of_variable]);
+                old_step=new_step;
+            }
+        }
+    }
+    sum_of_integration_region+=integrate(old_step,to_evaluate);
+    std:: ostringstream result_of_integration;
+    result_of_integration<<sum_of_integration_region;
     return (result_of_integration.str());
 }

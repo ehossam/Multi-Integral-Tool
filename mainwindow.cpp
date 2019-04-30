@@ -1,7 +1,9 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "integrator.h"
+#include <QFileDialog>
 
+QString filename;
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -39,7 +41,21 @@ void MainWindow::on_pushButton_clicked()
     std::string function_str = functionstr.toUtf8().constData();
     QString limits = ui->limitsText->toPlainText();
     std::string limits_str= limits.toUtf8().constData();
-    std::string result= integ.getResult(function_str,limits_str); //send to backend and get back the result
+    std::string result= integ.getResultByFunction(function_str,limits_str); //send to backend and get back the result
+    QString resut_ui = QString::fromStdString(result);
+    ui->result_browser->setText(resut_ui);
+}
+
+void MainWindow::on_pushButton_2_clicked()
+{
+    filename = QFileDialog::getOpenFileName(this, tr("Import Text File"), "/home", tr("TXT Files (*.txt)"));
+}
+
+void MainWindow::on_pushButton_3_clicked()
+{
+    Integrator integ;
+    std::string filename_str=filename.toUtf8().constData();
+    std::string result=integ.getResultByFile(filename_str);
     QString resut_ui = QString::fromStdString(result);
     ui->result_browser->setText(resut_ui);
 }

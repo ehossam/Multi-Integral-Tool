@@ -15,7 +15,8 @@ class Integrator
 {
 public:
     Integrator();
-    std::string getResult(std::string,std::string);
+    std::string getResultByFunction(std::string,std::string);
+    std::string getResultByFile(std::string);
 };
 
 #endif // INTEGRATOR_H
